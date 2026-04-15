@@ -8,15 +8,18 @@ paths when viewed from above (top-down view).  The module:
   * provides 2-D rotation-matrix helpers,
   * computes the locus traced by a source during one full turn,
   * bins that locus into a weighted density/intensity map, and
-  * plots the three canonical initial cases with matplotlib.
+  * plots four canonical cases with matplotlib.
 
-Initial cases (all viewed from directly above):
+Cases (all viewed from directly above):
   1. Point source on the drum axis, drum centred on the turntable axis
      → source appears stationary (single point).
   2. Point source off the drum axis, drum centred on the turntable axis
      → source traces a circular ring.
   3. Point source on the drum axis, but drum NOT centred on the turntable
      → source traces a circular ring of radius equal to the drum offset.
+  4. Point source off the drum axis AND drum offset from the turntable axis
+     → source traces a circular ring of radius equal to the vector sum of
+     the two offsets.
 """
 
 from __future__ import annotations
@@ -199,17 +202,17 @@ def plot_cases(
     n_steps: int = 3600,
     grid_size: int = 400,
 ) -> plt.Figure:
-    """Render the three canonical source-on-turntable cases.
+    """Render four canonical source-on-turntable cases.
 
     Parameters
     ----------
     drum_radius:
         Radius of the waste drum in metres (used only for the drum outline).
     source_offset_in_drum:
-        Radial offset of the source inside the drum for Case 2 (metres).
+        Radial offset of the source inside the drum for Cases 2 and 4 (metres).
     drum_offset:
         Offset of the drum centre from the turntable rotation axis for
-        Case 3 (metres).
+        Cases 3 and 4 (metres).
     n_steps:
         Angular resolution – number of steps per full revolution.
     grid_size:
@@ -247,27 +250,38 @@ def plot_cases(
             "source_in_drum": [0.0, 0.0],
             "drum_offset": [drum_offset, 0.0],
         },
+        {
+            "title": (
+                f"Case 4: Source {source_offset_in_drum:.2f} m off drum axis\n"
+                f"Drum offset {drum_offset:.2f} m from turntable axis\n"
+                "→ circular ring (vector-sum radius)"
+            ),
+            "source_in_drum": [source_offset_in_drum, 0.0],
+            "drum_offset": [drum_offset, 0.0],
+        },
     ]
 
-    # Shared spatial extent – large enough for all three cases
+    # Shared spatial extent – large enough for all four cases
     r_max = max(
         drum_radius,
         source_offset_in_drum,
         drum_offset + drum_radius,
+        drum_offset + source_offset_in_drum + drum_radius,
     ) * 1.5
     extent = (-r_max, r_max, -r_max, r_max)
 
-    fig = plt.figure(figsize=(16, 6))
-    gs = GridSpec(1, 3, figure=fig, wspace=0.40)
+    fig = plt.figure(figsize=(14, 12))
+    gs = GridSpec(2, 2, figure=fig, wspace=0.40, hspace=0.55)
 
     for idx, case in enumerate(cases):
+        row, col = divmod(idx, 2)
         xs, ys, weights = source_trace(
             case["source_in_drum"],
             case["drum_offset"],
             n_steps=n_steps,
         )
 
-        ax = fig.add_subplot(gs[0, idx])
+        ax = fig.add_subplot(gs[row, col])
         ax.set_facecolor("black")
 
         is_stationary = (np.std(xs) < 1e-9 and np.std(ys) < 1e-9)
@@ -294,7 +308,7 @@ def plot_cases(
             )
             fig.colorbar(im, ax=ax, shrink=0.75, label="Relative intensity")
 
-        # Drum outline (dashed cyan circle)
+        # Drum outline – shown at initial position (θ=0) as a reference
         drum_circle = Circle(
             case["drum_offset"],
             drum_radius,
@@ -302,7 +316,7 @@ def plot_cases(
             edgecolor="cyan",
             linewidth=1.5,
             linestyle="--",
-            label=f"Drum (r={drum_radius:.2f} m)",
+            label=f"Drum @ θ=0 (r={drum_radius:.2f} m)",
             zorder=4,
         )
         ax.add_patch(drum_circle)
@@ -327,7 +341,7 @@ def plot_cases(
         "Top-down view: source traces on a turntable\n"
         "(gamma-spectrometry waste drum)",
         fontsize=12,
-        y=1.02,
+        y=1.01,
     )
     return fig
 

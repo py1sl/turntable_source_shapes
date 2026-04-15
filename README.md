@@ -12,8 +12,9 @@ the top-down (bird's-eye) view depending on their position:
 | Configuration | Top-down shape |
 |---|---|
 | Source on drum axis, drum centred on turntable | Stationary point |
-| Source *off* drum axis, drum centred on turntable | Circular ring |
-| Source on drum axis, drum *offset* from turntable axis | Circular ring |
+| Source *off* drum axis, drum centred on turntable | Circular ring (radius = source offset) |
+| Source on drum axis, drum *offset* from turntable axis | Circular ring (radius = drum offset) |
+| Source *off* drum axis, drum *offset* from turntable axis | Circular ring (radius = vector sum of offsets) |
 
 The module uses a 2-D rotation matrix to compute the locus and bins the
 result into a weighted intensity map to account for emission probability.
@@ -32,7 +33,7 @@ xs, ys, weights = source_trace(
     intensity=1.0,
 )
 
-# Or generate the three canonical comparison plots directly
+# Or generate the four canonical comparison plots directly
 fig = plot_cases(
     drum_radius=0.30,            # drum radius in metres
     source_offset_in_drum=0.15,  # source radial offset in drum (Case 2)
@@ -64,7 +65,7 @@ revolution of the turntable.
 Bins a source-trace locus into a 2-D weighted intensity histogram.
 
 ### `plot_cases(...)`
-Generates a side-by-side matplotlib figure of the three initial cases.
+Generates a 2×2 matplotlib figure of the four canonical cases.
 
 ## Requirements
 
