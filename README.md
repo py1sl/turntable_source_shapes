@@ -115,3 +115,19 @@ and can optionally append a random multi-source case with
 - Python ≥ 3.9
 - NumPy
 - Matplotlib
+- pytest (for tests)
+- flake8 (for linting)
+
+## Development checks
+
+Run linting:
+
+```bash
+flake8 .
+```
+
+Run tests:
+
+```bash
+pytest
+```
