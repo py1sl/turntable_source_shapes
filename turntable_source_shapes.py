@@ -269,7 +269,7 @@ def plot_cases(
     random_n_sources: int | None = None,
     random_seed: int | None = None,
 ) -> plt.Figure:
-    """Render canonical source-on-turntable cases.
+    """Render source-on-turntable cases (4 standard + optional random case).
 
     Parameters
     ----------
@@ -347,7 +347,7 @@ def plot_cases(
             }
         )
 
-    # Shared spatial extent – large enough for all cases
+    # Shared spatial extent – large enough for standard and optional cases
     r_max = max(
         drum_radius,
         source_offset_in_drum,
