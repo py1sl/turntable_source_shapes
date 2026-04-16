@@ -185,7 +185,8 @@ def volume_source_trace(
     drum_offset = np.asarray(drum_offset, dtype=float)
     thetas_turntable = np.linspace(0, 2 * np.pi, n_steps, endpoint=False)
 
-    # Equal-area sampling inside disk: r^2 is uniform in [0, drum_radius^2].
+    # Equal-area sampling inside disk: each radial bin is uniform in r^2, not r.
+    # This keeps each annular bin area approximately equal.
     radial_idx = np.arange(n_radial, dtype=float)
     source_r = drum_radius * np.sqrt((radial_idx + 0.5) / n_radial)
     source_theta = np.linspace(0, 2 * np.pi, n_angular, endpoint=False)
@@ -200,8 +201,10 @@ def volume_source_trace(
     c = np.cos(thetas_turntable)
     s = np.sin(thetas_turntable)
     # Broadcast turntable angles against all sampled source points.
-    xs = c[:, None] * relative_pos[:, 0][None, :] - s[:, None] * relative_pos[:, 1][None, :]
-    ys = s[:, None] * relative_pos[:, 0][None, :] + c[:, None] * relative_pos[:, 1][None, :]
+    x_coords = relative_pos[:, 0][None, :]
+    y_coords = relative_pos[:, 1][None, :]
+    xs = c[:, None] * x_coords - s[:, None] * y_coords
+    ys = s[:, None] * x_coords + c[:, None] * y_coords
 
     xs = xs.ravel()
     ys = ys.ravel()
