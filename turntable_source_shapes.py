@@ -178,7 +178,7 @@ def volume_source_trace(
         all rotation angles; sum(weights) equals *intensity*.
     """
     if drum_radius <= 0:
-        raise ValueError("drum_radius must be positive")
+        raise ValueError("drum_radius must be greater than zero")
     if n_radial <= 0 or n_angular <= 0:
         raise ValueError("n_radial and n_angular must be positive")
 
@@ -189,16 +189,17 @@ def volume_source_trace(
     radial_idx = np.arange(n_radial, dtype=float)
     source_r = drum_radius * np.sqrt((radial_idx + 0.5) / n_radial)
     source_theta = np.linspace(0, 2 * np.pi, n_angular, endpoint=False)
-    rr, tt = np.meshgrid(source_r, source_theta, indexing="xy")
+    radial_grid, angular_grid = np.meshgrid(source_r, source_theta, indexing="xy")
 
-    source_x = (rr * np.cos(tt)).ravel()
-    source_y = (rr * np.sin(tt)).ravel()
+    source_x = (radial_grid * np.cos(angular_grid)).ravel()
+    source_y = (radial_grid * np.sin(angular_grid)).ravel()
     source_points = np.column_stack([source_x, source_y])
 
     relative_pos = source_points + drum_offset
 
     c = np.cos(thetas_turntable)
     s = np.sin(thetas_turntable)
+    # Broadcast turntable angles against all sampled source points.
     xs = c[:, None] * relative_pos[:, 0][None, :] - s[:, None] * relative_pos[:, 1][None, :]
     ys = s[:, None] * relative_pos[:, 0][None, :] + c[:, None] * relative_pos[:, 1][None, :]
 
