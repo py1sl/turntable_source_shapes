@@ -141,6 +141,71 @@ def source_trace(
     return xs, ys, weights
 
 
+def random_sources_in_drum(
+    n_sources: int,
+    drum_radius: float,
+    total_intensity: float = 1.0,
+    seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate random source positions and varied intensities inside a drum."""
+    if n_sources <= 0:
+        raise ValueError("n_sources must be a positive integer.")
+    if drum_radius <= 0:
+        raise ValueError("drum_radius must be positive.")
+    if total_intensity <= 0:
+        raise ValueError("total_intensity must be positive.")
+
+    rng = np.random.default_rng(seed)
+
+    # Uniform distribution over the drum area
+    angles = rng.uniform(0.0, 2.0 * np.pi, size=n_sources)
+    radii = drum_radius * np.sqrt(rng.uniform(0.0, 1.0, size=n_sources))
+    source_positions = np.column_stack((radii * np.cos(angles),
+                                        radii * np.sin(angles)))
+
+    # Random positive intensities normalized to the requested total
+    raw_intensities = rng.uniform(0.0, 1.0, size=n_sources)
+    intensities = total_intensity * (raw_intensities / np.sum(raw_intensities))
+
+    return source_positions, intensities
+
+
+def multi_source_trace(
+    sources_in_drum: np.ndarray | list[list[float]],
+    drum_offset: np.ndarray | list[float],
+    intensities: np.ndarray | list[float],
+    n_steps: int = 360,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the combined trace of multiple point sources in one drum."""
+    sources_in_drum = np.asarray(sources_in_drum, dtype=float)
+    drum_offset = np.asarray(drum_offset, dtype=float)
+    intensities = np.asarray(intensities, dtype=float)
+
+    if sources_in_drum.ndim != 2 or sources_in_drum.shape[1] != 2:
+        raise ValueError("sources_in_drum must have shape (n_sources, 2).")
+    if intensities.ndim != 1 or intensities.shape[0] != sources_in_drum.shape[0]:
+        raise ValueError("intensities must have one entry per source.")
+    if np.any(intensities < 0):
+        raise ValueError("intensities must be non-negative.")
+    if not np.any(intensities > 0):
+        raise ValueError("at least one source intensity must be positive.")
+    if n_steps <= 0:
+        raise ValueError("n_steps must be a positive integer.")
+
+    thetas = np.linspace(0, 2 * np.pi, n_steps, endpoint=False)
+    c = np.cos(thetas)[:, None]
+    s = np.sin(thetas)[:, None]
+
+    relative_positions = sources_in_drum + drum_offset
+    xs_matrix = c * relative_positions[:, 0] - s * relative_positions[:, 1]
+    ys_matrix = s * relative_positions[:, 0] + c * relative_positions[:, 1]
+
+    xs = xs_matrix.reshape(-1)
+    ys = ys_matrix.reshape(-1)
+    weights = np.tile(intensities / n_steps, n_steps)
+    return xs, ys, weights
+
+
 def compute_density_map(
     xs: np.ndarray,
     ys: np.ndarray,
@@ -201,8 +266,10 @@ def plot_cases(
     drum_offset: float = 0.20,
     n_steps: int = 3600,
     grid_size: int = 400,
+    random_n_sources: int | None = None,
+    random_seed: int | None = None,
 ) -> plt.Figure:
-    """Render four canonical source-on-turntable cases.
+    """Render canonical source-on-turntable cases.
 
     Parameters
     ----------
@@ -217,6 +284,11 @@ def plot_cases(
         Angular resolution – number of steps per full revolution.
     grid_size:
         Resolution of the 2-D density map (number of bins per axis).
+    random_n_sources:
+        If provided and > 0, append an additional case with this many random
+        point sources distributed throughout the drum and random intensities.
+    random_seed:
+        Optional random seed used when *random_n_sources* is enabled.
 
     Returns
     -------
@@ -261,7 +333,21 @@ def plot_cases(
         },
     ]
 
-    # Shared spatial extent – large enough for all four cases
+    if random_n_sources is not None and random_n_sources > 0:
+        cases.append(
+            {
+                "title": (
+                    f"Case 5: {random_n_sources} random point sources in drum\n"
+                    "Random source intensities\n"
+                    "→ superposed circular traces"
+                ),
+                "source_in_drum": None,
+                "drum_offset": [0.0, 0.0],
+                "random_sources": True,
+            }
+        )
+
+    # Shared spatial extent – large enough for all cases
     r_max = max(
         drum_radius,
         source_offset_in_drum,
@@ -270,16 +356,34 @@ def plot_cases(
     ) * 1.5
     extent = (-r_max, r_max, -r_max, r_max)
 
-    fig = plt.figure(figsize=(14, 12))
-    gs = GridSpec(2, 2, figure=fig, wspace=0.40, hspace=0.55)
+    n_cases = len(cases)
+    ncols = 2 if n_cases <= 4 else 3
+    nrows = int(np.ceil(n_cases / ncols))
+
+    fig = plt.figure(figsize=(7 * ncols, 6 * nrows))
+    gs = GridSpec(nrows, ncols, figure=fig, wspace=0.40, hspace=0.55)
 
     for idx, case in enumerate(cases):
-        row, col = divmod(idx, 2)
-        xs, ys, weights = source_trace(
-            case["source_in_drum"],
-            case["drum_offset"],
-            n_steps=n_steps,
-        )
+        row, col = divmod(idx, ncols)
+        if case.get("random_sources", False):
+            random_sources, random_intensities = random_sources_in_drum(
+                n_sources=random_n_sources,
+                drum_radius=drum_radius,
+                total_intensity=1.0,
+                seed=random_seed,
+            )
+            xs, ys, weights = multi_source_trace(
+                random_sources,
+                case["drum_offset"],
+                random_intensities,
+                n_steps=n_steps,
+            )
+        else:
+            xs, ys, weights = source_trace(
+                case["source_in_drum"],
+                case["drum_offset"],
+                n_steps=n_steps,
+            )
 
         ax = fig.add_subplot(gs[row, col])
         ax.set_facecolor("black")
