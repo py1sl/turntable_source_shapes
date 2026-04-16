@@ -27,6 +27,8 @@ result into a weighted intensity map to account for emission probability.
 from turntable_source_shapes import (
     rotation_matrix_2d,
     source_trace,
+    random_sources_in_drum,
+    multi_source_trace,
     volume_source_trace,
     plot_cases,
 )
@@ -50,6 +52,23 @@ fig = plot_cases(
 )
 plt.savefig("my_plot.png", dpi=150, bbox_inches="tight")
 plt.show()
+
+# Optional: random n-source distribution throughout the drum
+source_positions, source_intensities = random_sources_in_drum(
+    n_sources=25,
+    drum_radius=0.30,
+    total_intensity=1.0,
+    seed=42,
+)
+xs, ys, weights = multi_source_trace(
+    sources_in_drum=source_positions,
+    drum_offset=[0.0, 0.0],
+    intensities=source_intensities,
+    n_steps=3600,
+)
+
+# Or append an automatic random-source case to the comparison plot
+fig = plot_cases(random_n_sources=25, random_seed=42)
 ```
 
 Run the script directly to produce `turntable_source_shapes.png`:
@@ -70,6 +89,15 @@ Rotates a 2-D point `(x, y)` by `theta` radians about the origin.
 Computes the `(xs, ys, weights)` locus of a source through one full
 revolution of the turntable.
 
+### `random_sources_in_drum(n_sources, drum_radius, total_intensity=1.0, seed=None)`
+Generates `n_sources` random point locations uniformly within the drum
+cross-section and assigns different random intensities that sum to
+`total_intensity`.
+
+### `multi_source_trace(sources_in_drum, drum_offset, intensities, n_steps=360)`
+Computes the combined `(xs, ys, weights)` locus for multiple point sources
+in one drum.
+
 ### `volume_source_trace(drum_radius, drum_offset, n_steps=360, intensity=1.0, n_radial=18, n_angular=72)`
 Computes the `(xs, ys, weights)` locus for a uniformly distributed drum
 volume source using equal-area sampling across the drum cross-section.
@@ -78,8 +106,9 @@ volume source using equal-area sampling across the drum cross-section.
 Bins a source-trace locus into a 2-D weighted intensity histogram.
 
 ### `plot_cases(...)`
-Generates a 2×3 matplotlib figure of six cases (four point-source and two
-volume-source cases).
+Generates canonical comparison plots (four point-source + two volume-source),
+and can optionally append a random multi-source case with
+`plot_cases(random_n_sources=<n>, random_seed=<seed>)`.
 
 ## Requirements
 
