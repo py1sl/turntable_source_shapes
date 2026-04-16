@@ -6,9 +6,16 @@ As the turntable revolves, different source configurations trace different
 paths when viewed from above (top-down view).  The module:
 
   * provides 2-D rotation-matrix helpers,
+  * models waste-container geometry via :class:`WasteContainer` subclasses,
   * computes the locus traced by a source during one full turn,
   * bins that locus into a weighted density/intensity map, and
   * plots canonical point-source and volume-source cases with matplotlib.
+
+Container types
+---------------
+* :class:`CylindricalDrum` — circular cross-section defined by *radius*.
+* :class:`CuboidContainer` — rectangular cross-section defined by *width*
+  (x-axis) and *length* (y-axis).
 
 Cases (all viewed from directly above):
   1. Point source on the drum axis, drum centred on the turntable axis
@@ -24,10 +31,12 @@ Cases (all viewed from directly above):
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Patch, Rectangle
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +84,194 @@ def rotate_point(point: np.ndarray | list[float], theta: float) -> np.ndarray:
     """
     R = rotation_matrix_2d(theta)
     return R @ np.asarray(point, dtype=float)
+
+
+# ---------------------------------------------------------------------------
+# Container geometry
+# ---------------------------------------------------------------------------
+
+class WasteContainer(ABC):
+    """Abstract base class for a waste container's 2-D cross-section geometry.
+
+    Concrete subclasses encapsulate how source points are sampled from within
+    the container and how the container outline is rendered in a plot.
+    """
+
+    @abstractmethod
+    def sample_volume_points(self, n1: int, n2: int) -> np.ndarray:
+        """Return an ``(N, 2)`` array of representative cross-section sample points.
+
+        The points cover the container cross-section for volume-source
+        simulation.  The two integer parameters control sampling resolution
+        in two shape-specific dimensions (e.g. radial / angular for a
+        cylinder; x-grid / y-grid for a cuboid).
+
+        Parameters
+        ----------
+        n1, n2 : int
+            Number of bins / sample points in each dimension.  Both must be
+            positive.
+
+        Returns
+        -------
+        numpy.ndarray of shape (n1 * n2, 2)
+        """
+
+    @abstractmethod
+    def sample_random_points(self, n: int, rng: np.random.Generator) -> np.ndarray:
+        """Return ``(n, 2)`` uniformly random points inside the cross-section.
+
+        Parameters
+        ----------
+        n : int
+            Number of random points to draw.
+        rng : numpy.random.Generator
+            Random number generator to use.
+
+        Returns
+        -------
+        numpy.ndarray of shape (n, 2)
+        """
+
+    @property
+    @abstractmethod
+    def characteristic_radius(self) -> float:
+        """Bounding radius of the container cross-section in metres.
+
+        Used for display-extent calculations so the full container always
+        fits within the plot axes.
+        """
+
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """Short human-readable description used in plot labels."""
+
+    @abstractmethod
+    def outline_patch(self, offset: np.ndarray, **kwargs) -> Patch:
+        """Return a matplotlib ``Patch`` for the container outline.
+
+        Parameters
+        ----------
+        offset : array-like of shape (2,)
+            (x, y) position of the container centre in the lab frame.
+        **kwargs
+            Forwarded to the underlying ``Patch`` constructor (e.g.
+            ``edgecolor``, ``linewidth``).
+
+        Returns
+        -------
+        matplotlib.patches.Patch
+        """
+
+
+class CylindricalDrum(WasteContainer):
+    """Cylindrical waste drum with a circular cross-section.
+
+    Parameters
+    ----------
+    radius : float
+        Drum radius in metres (must be positive).
+    """
+
+    def __init__(self, radius: float) -> None:
+        if radius <= 0:
+            raise ValueError("radius must be positive.")
+        self.radius = radius
+
+    def sample_volume_points(self, n1: int, n2: int) -> np.ndarray:
+        """Equal-area polar grid over the drum cross-section.
+
+        Parameters
+        ----------
+        n1 : int
+            Number of equal-area radial bins.
+        n2 : int
+            Number of angular bins.
+        """
+        if n1 <= 0 or n2 <= 0:
+            raise ValueError("n1 and n2 must be positive.")
+        radial_idx = np.arange(n1, dtype=float)
+        source_r = self.radius * np.sqrt((radial_idx + 0.5) / n1)
+        source_theta = np.linspace(0, 2 * np.pi, n2, endpoint=False)
+        radial_grid, angular_grid = np.meshgrid(source_r, source_theta, indexing="xy")
+        source_x = (radial_grid * np.cos(angular_grid)).ravel()
+        source_y = (radial_grid * np.sin(angular_grid)).ravel()
+        return np.column_stack([source_x, source_y])
+
+    def sample_random_points(self, n: int, rng: np.random.Generator) -> np.ndarray:
+        """Uniformly random points within the drum cross-section."""
+        angles = rng.uniform(0.0, 2.0 * np.pi, size=n)
+        radii = self.radius * np.sqrt(rng.uniform(0.0, 1.0, size=n))
+        return np.column_stack((radii * np.cos(angles), radii * np.sin(angles)))
+
+    @property
+    def characteristic_radius(self) -> float:
+        return self.radius
+
+    @property
+    def description(self) -> str:
+        return f"r={self.radius:.2f} m"
+
+    def outline_patch(self, offset: np.ndarray, **kwargs) -> Circle:
+        """Circle patch centred at *offset* with the drum's radius."""
+        return Circle(tuple(np.asarray(offset, dtype=float)), self.radius, **kwargs)
+
+
+class CuboidContainer(WasteContainer):
+    """Rectangular cuboid waste container with a rectangular cross-section.
+
+    Parameters
+    ----------
+    width : float
+        Extent along the x-axis in metres (must be positive).
+    length : float
+        Extent along the y-axis in metres (must be positive).
+    """
+
+    def __init__(self, width: float, length: float) -> None:
+        if width <= 0 or length <= 0:
+            raise ValueError("width and length must be positive.")
+        self.width = width
+        self.length = length
+
+    def sample_volume_points(self, n1: int, n2: int) -> np.ndarray:
+        """Uniform cell-centre grid over the rectangular cross-section.
+
+        Parameters
+        ----------
+        n1 : int
+            Number of sample columns along the width (x) axis.
+        n2 : int
+            Number of sample rows along the length (y) axis.
+        """
+        if n1 <= 0 or n2 <= 0:
+            raise ValueError("n1 and n2 must be positive.")
+        xs = (np.arange(n1) + 0.5) * self.width / n1 - self.width / 2
+        ys = (np.arange(n2) + 0.5) * self.length / n2 - self.length / 2
+        xg, yg = np.meshgrid(xs, ys, indexing="xy")
+        return np.column_stack([xg.ravel(), yg.ravel()])
+
+    def sample_random_points(self, n: int, rng: np.random.Generator) -> np.ndarray:
+        """Uniformly random points within the rectangular cross-section."""
+        xs = rng.uniform(-self.width / 2, self.width / 2, size=n)
+        ys = rng.uniform(-self.length / 2, self.length / 2, size=n)
+        return np.column_stack([xs, ys])
+
+    @property
+    def characteristic_radius(self) -> float:
+        """Half-diagonal of the rectangle."""
+        return float(np.sqrt((self.width / 2) ** 2 + (self.length / 2) ** 2))
+
+    @property
+    def description(self) -> str:
+        return f"{self.width:.2f}x{self.length:.2f} m"
+
+    def outline_patch(self, offset: np.ndarray, **kwargs) -> Rectangle:
+        """Axis-aligned rectangle patch centred at *offset*."""
+        offset = np.asarray(offset, dtype=float)
+        xy = (offset[0] - self.width / 2, offset[1] - self.length / 2)
+        return Rectangle(xy, self.width, self.length, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -141,13 +338,53 @@ def source_trace(
     return xs, ys, weights
 
 
+def random_sources_in_container(
+    container: WasteContainer,
+    n_sources: int,
+    total_intensity: float = 1.0,
+    seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate random source positions and varied intensities inside a container.
+
+    Parameters
+    ----------
+    container : WasteContainer
+        Defines the geometry used to sample positions.
+    n_sources : int
+        Number of point sources to place.
+    total_intensity : float
+        Total emission intensity shared across all sources.
+    seed : int or None
+        Optional random seed for reproducibility.
+
+    Returns
+    -------
+    source_positions : numpy.ndarray of shape (n_sources, 2)
+    intensities : numpy.ndarray of shape (n_sources,)
+    """
+    if n_sources <= 0:
+        raise ValueError("n_sources must be a positive integer.")
+    if total_intensity <= 0:
+        raise ValueError("total_intensity must be positive.")
+
+    rng = np.random.default_rng(seed)
+    source_positions = container.sample_random_points(n_sources, rng)
+    raw_intensities = rng.uniform(0.0, 1.0, size=n_sources)
+    intensities = total_intensity * (raw_intensities / np.sum(raw_intensities))
+    return source_positions, intensities
+
+
 def random_sources_in_drum(
     n_sources: int,
     drum_radius: float,
     total_intensity: float = 1.0,
     seed: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Generate random source positions and varied intensities inside a drum."""
+    """Generate random source positions and varied intensities inside a drum.
+
+    Convenience wrapper around :func:`random_sources_in_container` for a
+    :class:`CylindricalDrum`.
+    """
     if n_sources <= 0:
         raise ValueError("n_sources must be a positive integer.")
     if drum_radius <= 0:
@@ -156,17 +393,10 @@ def random_sources_in_drum(
         raise ValueError("total_intensity must be positive.")
 
     rng = np.random.default_rng(seed)
-
-    # Uniform distribution over the drum area
-    angles = rng.uniform(0.0, 2.0 * np.pi, size=n_sources)
-    radii = drum_radius * np.sqrt(rng.uniform(0.0, 1.0, size=n_sources))
-    source_positions = np.column_stack((radii * np.cos(angles),
-                                        radii * np.sin(angles)))
-
-    # Random positive intensities normalized to the requested total
+    container = CylindricalDrum(drum_radius)
+    source_positions = container.sample_random_points(n_sources, rng)
     raw_intensities = rng.uniform(0.0, 1.0, size=n_sources)
     intensities = total_intensity * (raw_intensities / np.sum(raw_intensities))
-
     return source_positions, intensities
 
 
@@ -207,34 +437,42 @@ def multi_source_trace(
 
 
 def volume_source_trace(
-    drum_radius: float,
+    container: WasteContainer,
     drum_offset: np.ndarray | list[float],
     n_steps: int = 360,
     intensity: float = 1.0,
     n_radial: int = 18,
     n_angular: int = 72,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute the locus for a uniformly distributed volume source in a drum.
+    """Compute the locus for a uniformly distributed volume source in a container.
 
-    A finite set of source points is sampled across the drum cross-section using
-    equal-area bins in polar coordinates, then each point is rotated through one
-    full turntable revolution.
+    A finite set of source points is sampled across the container cross-section
+    using the container's own sampling strategy, then each point is rotated
+    through one full turntable revolution.
 
     Parameters
     ----------
-    drum_radius:
-        Drum radius in metres.
+    container : WasteContainer
+        Container geometry providing cross-section sample points.
+        Use :class:`CylindricalDrum` for a drum or
+        :class:`CuboidContainer` for a rectangular box.
     drum_offset:
-        (x, y) offset of the drum centre from the turntable rotation axis
+        (x, y) offset of the container centre from the turntable rotation axis
         (metres).
     n_steps:
         Number of angular steps for one full revolution.
     intensity:
-        Total relative emission intensity of the whole drum volume source.
+        Total relative emission intensity of the whole volume source.
     n_radial:
-        Number of equal-area radial bins used for source sampling.
+        First sampling dimension passed to
+        ``container.sample_volume_points`` (for :class:`CylindricalDrum`:
+        number of equal-area radial bins; for :class:`CuboidContainer`:
+        number of columns along the width).
     n_angular:
-        Number of angular bins used for source sampling.
+        Second sampling dimension passed to
+        ``container.sample_volume_points`` (for :class:`CylindricalDrum`:
+        number of angular bins; for :class:`CuboidContainer`:
+        number of rows along the length).
 
     Returns
     -------
@@ -242,25 +480,10 @@ def volume_source_trace(
         Flattened coordinates and weights of all sampled source positions over
         all rotation angles; sum(weights) equals *intensity*.
     """
-    if drum_radius <= 0:
-        raise ValueError("drum_radius must be greater than zero")
-    if n_radial <= 0 or n_angular <= 0:
-        raise ValueError("n_radial and n_angular must be positive")
-
     drum_offset = np.asarray(drum_offset, dtype=float)
     thetas_turntable = np.linspace(0, 2 * np.pi, n_steps, endpoint=False)
 
-    # Equal-area sampling inside disk: each radial bin is uniform in r^2, not r.
-    # This keeps each annular bin area approximately equal.
-    radial_idx = np.arange(n_radial, dtype=float)
-    source_r = drum_radius * np.sqrt((radial_idx + 0.5) / n_radial)
-    source_theta = np.linspace(0, 2 * np.pi, n_angular, endpoint=False)
-    radial_grid, angular_grid = np.meshgrid(source_r, source_theta, indexing="xy")
-
-    source_x = (radial_grid * np.cos(angular_grid)).ravel()
-    source_y = (radial_grid * np.sin(angular_grid)).ravel()
-    source_points = np.column_stack([source_x, source_y])
-
+    source_points = container.sample_volume_points(n_radial, n_angular)
     relative_pos = source_points + drum_offset
 
     c = np.cos(thetas_turntable)
@@ -342,17 +565,20 @@ def plot_cases(
     n_volume_radial: int = 18,
     n_volume_angular: int = 72,
     fig_size: tuple[float, float] = (18.0, 12.0),
+    container: WasteContainer | None = None,
 ) -> plt.Figure:
     """Render canonical source-on-turntable cases.
 
     Parameters
     ----------
     drum_radius:
-        Radius of the waste drum in metres (used only for the drum outline).
+        Radius used to build a default :class:`CylindricalDrum` when
+        *container* is not provided (metres).
     source_offset_in_drum:
-        Radial offset of the source inside the drum for Cases 2 and 4 (metres).
+        Radial offset of the source inside the container for Cases 2 and 4
+        (metres).
     drum_offset:
-        Offset of the drum centre from the turntable rotation axis for
+        Offset of the container centre from the turntable rotation axis for
         Cases 3 and 4 (metres).
     n_steps:
         Angular resolution – number of steps per full revolution.
@@ -360,20 +586,28 @@ def plot_cases(
         Resolution of the 2-D density map (number of bins per axis).
     random_n_sources:
         If provided and > 0, append an additional case with this many random
-        point sources distributed throughout the drum and random intensities.
+        point sources distributed throughout the container with random
+        intensities.
     random_seed:
         Optional random seed used when *random_n_sources* is enabled.
     n_volume_radial:
-        Number of equal-area radial bins used for volume-source sampling.
+        First sampling dimension for volume-source cases (passed to
+        ``container.sample_volume_points`` as *n1*).
     n_volume_angular:
-        Number of angular bins used for volume-source sampling.
+        Second sampling dimension for volume-source cases (passed to
+        ``container.sample_volume_points`` as *n2*).
     fig_size:
         Matplotlib figure size in inches as ``(width, height)``.
+    container : WasteContainer or None
+        Container geometry to use.  If *None*, a
+        :class:`CylindricalDrum` with *drum_radius* is created.
 
     Returns
     -------
     matplotlib.figure.Figure
     """
+    if container is None:
+        container = CylindricalDrum(drum_radius)
     cases = [
         {
             "title": (
@@ -433,7 +667,7 @@ def plot_cases(
         cases.append(
             {
                 "title": (
-                    f"Case 7: {random_n_sources} random point sources in drum\n"
+                    f"Case 7: {random_n_sources} random point sources in container\n"
                     "Random source intensities\n"
                     "→ superposed circular traces"
                 ),
@@ -444,11 +678,12 @@ def plot_cases(
         )
 
     # Shared spatial extent – large enough for standard and optional cases
+    cr = container.characteristic_radius
     r_max = max(
-        drum_radius,
+        cr,
         source_offset_in_drum,
-        drum_offset + drum_radius,
-        drum_offset + source_offset_in_drum + drum_radius,
+        drum_offset + cr,
+        drum_offset + source_offset_in_drum + cr,
     ) * 1.5
     extent = (-r_max, r_max, -r_max, r_max)
 
@@ -460,9 +695,9 @@ def plot_cases(
     for idx, case in enumerate(cases):
         row, col = divmod(idx, ncols)
         if case.get("random_sources", False):
-            random_sources, random_intensities = random_sources_in_drum(
+            random_sources, random_intensities = random_sources_in_container(
+                container,
                 n_sources=random_n_sources,
-                drum_radius=drum_radius,
                 total_intensity=1.0,
                 seed=random_seed,
             )
@@ -474,7 +709,7 @@ def plot_cases(
             )
         elif case.get("is_volume", False):
             xs, ys, weights = volume_source_trace(
-                drum_radius=drum_radius,
+                container,
                 drum_offset=case["drum_offset"],
                 n_steps=n_steps,
                 n_radial=n_volume_radial,
@@ -514,18 +749,17 @@ def plot_cases(
             )
             fig.colorbar(im, ax=ax, shrink=0.75, label="Relative intensity")
 
-        # Drum outline – shown at initial position (θ=0) as a reference
-        drum_circle = Circle(
+        # Container outline – shown at initial position (θ=0) as a reference
+        outline = container.outline_patch(
             case["drum_offset"],
-            drum_radius,
             fill=False,
             edgecolor="cyan",
             linewidth=1.5,
             linestyle="--",
-            label=f"Drum @ θ=0 (r={drum_radius:.2f} m)",
+            label=f"Container @ theta=0 ({container.description})",
             zorder=4,
         )
-        ax.add_patch(drum_circle)
+        ax.add_patch(outline)
 
         # Turntable rotation axis (blue cross at origin)
         ax.plot(

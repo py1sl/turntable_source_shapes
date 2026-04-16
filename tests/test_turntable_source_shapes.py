@@ -2,8 +2,12 @@ import numpy as np
 import pytest
 
 from turntable_source_shapes import (
+    CuboidContainer,
+    CylindricalDrum,
+    WasteContainer,
     compute_density_map,
     multi_source_trace,
+    random_sources_in_container,
     random_sources_in_drum,
     rotate_point,
     rotation_matrix_2d,
@@ -91,8 +95,9 @@ def test_multi_source_trace_validates_inputs():
 
 
 def test_volume_source_trace_shapes_and_weight_sum():
+    drum = CylindricalDrum(0.3)
     xs, ys, weights = volume_source_trace(
-        drum_radius=0.3,
+        drum,
         drum_offset=[0.1, 0.0],
         n_steps=8,
         intensity=2.5,
@@ -107,10 +112,9 @@ def test_volume_source_trace_shapes_and_weight_sum():
 
 
 def test_volume_source_trace_validates_inputs():
-    with pytest.raises(ValueError, match="drum_radius must be greater than zero"):
-        volume_source_trace(0.0, [0.0, 0.0])
-    with pytest.raises(ValueError, match="n_radial and n_angular must be positive"):
-        volume_source_trace(0.3, [0.0, 0.0], n_radial=0)
+    drum = CylindricalDrum(0.3)
+    with pytest.raises(ValueError, match="n1 and n2 must be positive."):
+        volume_source_trace(drum, [0.0, 0.0], n_radial=0)
 
 
 def test_compute_density_map_preserves_total_weight():
@@ -122,3 +126,144 @@ def test_compute_density_map_preserves_total_weight():
     assert xedges.shape == (21,)
     assert yedges.shape == (21,)
     assert np.isclose(np.sum(hist), np.sum(weights))
+
+
+# ---------------------------------------------------------------------------
+# WasteContainer – CylindricalDrum
+# ---------------------------------------------------------------------------
+
+def test_cylindrical_drum_is_waste_container():
+    assert isinstance(CylindricalDrum(0.3), WasteContainer)
+
+
+def test_cylindrical_drum_validates_inputs():
+    with pytest.raises(ValueError, match="radius must be positive."):
+        CylindricalDrum(0.0)
+    with pytest.raises(ValueError, match="radius must be positive."):
+        CylindricalDrum(-1.0)
+
+
+def test_cylindrical_drum_characteristic_radius():
+    drum = CylindricalDrum(0.25)
+    assert drum.characteristic_radius == 0.25
+
+
+def test_cylindrical_drum_sample_volume_points_shape_and_bounds():
+    drum = CylindricalDrum(0.3)
+    points = drum.sample_volume_points(3, 4)
+    assert points.shape == (12, 2)
+    radii = np.linalg.norm(points, axis=1)
+    assert np.all(radii <= 0.3 + 1e-12)
+
+
+def test_cylindrical_drum_sample_volume_points_validates_inputs():
+    drum = CylindricalDrum(0.3)
+    with pytest.raises(ValueError, match="n1 and n2 must be positive."):
+        drum.sample_volume_points(0, 4)
+
+
+def test_cylindrical_drum_sample_random_points():
+    drum = CylindricalDrum(0.3)
+    rng = np.random.default_rng(42)
+    points = drum.sample_random_points(20, rng)
+    assert points.shape == (20, 2)
+    radii = np.linalg.norm(points, axis=1)
+    assert np.all(radii <= 0.3 + 1e-12)
+
+
+# ---------------------------------------------------------------------------
+# WasteContainer – CuboidContainer
+# ---------------------------------------------------------------------------
+
+def test_cuboid_container_is_waste_container():
+    assert isinstance(CuboidContainer(0.4, 0.6), WasteContainer)
+
+
+def test_cuboid_container_validates_inputs():
+    with pytest.raises(ValueError, match="width and length must be positive."):
+        CuboidContainer(0.0, 0.5)
+    with pytest.raises(ValueError, match="width and length must be positive."):
+        CuboidContainer(0.5, -1.0)
+
+
+def test_cuboid_container_characteristic_radius():
+    box = CuboidContainer(0.4, 0.6)
+    expected = float(np.sqrt(0.2 ** 2 + 0.3 ** 2))
+    assert np.isclose(box.characteristic_radius, expected)
+
+
+def test_cuboid_container_sample_volume_points_shape_and_bounds():
+    box = CuboidContainer(0.4, 0.6)
+    points = box.sample_volume_points(4, 6)
+    assert points.shape == (24, 2)
+    assert np.all(np.abs(points[:, 0]) <= 0.2 + 1e-12)
+    assert np.all(np.abs(points[:, 1]) <= 0.3 + 1e-12)
+
+
+def test_cuboid_container_sample_volume_points_validates_inputs():
+    box = CuboidContainer(0.4, 0.6)
+    with pytest.raises(ValueError, match="n1 and n2 must be positive."):
+        box.sample_volume_points(4, 0)
+
+
+def test_cuboid_container_sample_random_points():
+    box = CuboidContainer(0.4, 0.6)
+    rng = np.random.default_rng(7)
+    points = box.sample_random_points(20, rng)
+    assert points.shape == (20, 2)
+    assert np.all(np.abs(points[:, 0]) <= 0.2 + 1e-12)
+    assert np.all(np.abs(points[:, 1]) <= 0.3 + 1e-12)
+
+
+# ---------------------------------------------------------------------------
+# volume_source_trace – cuboid path
+# ---------------------------------------------------------------------------
+
+def test_volume_source_trace_cuboid_shapes_and_weight_sum():
+    box = CuboidContainer(0.4, 0.6)
+    xs, ys, weights = volume_source_trace(
+        box,
+        drum_offset=[0.0, 0.0],
+        n_steps=4,
+        intensity=1.0,
+        n_radial=2,
+        n_angular=3,
+    )
+    expected_size = 4 * 2 * 3
+    assert xs.shape == (expected_size,)
+    assert np.isclose(np.sum(weights), 1.0)
+
+
+# ---------------------------------------------------------------------------
+# random_sources_in_container
+# ---------------------------------------------------------------------------
+
+def test_random_sources_in_container_cylindrical():
+    drum = CylindricalDrum(0.3)
+    positions, intensities = random_sources_in_container(drum, 5, total_intensity=2.0, seed=7)
+    assert positions.shape == (5, 2)
+    assert np.isclose(np.sum(intensities), 2.0)
+    assert np.all(np.linalg.norm(positions, axis=1) <= 0.3 + 1e-12)
+
+
+def test_random_sources_in_container_cuboid():
+    box = CuboidContainer(0.4, 0.6)
+    positions, intensities = random_sources_in_container(box, 8, seed=42)
+    assert positions.shape == (8, 2)
+    assert np.isclose(np.sum(intensities), 1.0)
+    assert np.all(np.abs(positions[:, 0]) <= 0.2 + 1e-12)
+    assert np.all(np.abs(positions[:, 1]) <= 0.3 + 1e-12)
+
+
+@pytest.mark.parametrize(
+    "args, error_message",
+    [
+        ((0, 1.0, None), "n_sources must be a positive integer."),
+        ((1, 0.0, None), "total_intensity must be positive."),
+    ],
+)
+def test_random_sources_in_container_validates_inputs(args, error_message):
+    drum = CylindricalDrum(0.3)
+    n_sources, total_intensity, seed = args
+    with pytest.raises(ValueError, match=error_message):
+        random_sources_in_container(drum, n_sources, total_intensity=total_intensity, seed=seed)
