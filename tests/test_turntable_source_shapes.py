@@ -33,6 +33,12 @@ def test_source_trace_shapes_and_weight_sum():
     assert np.isclose(np.sum(weights), 3.0)
 
 
+def test_source_trace_circle_radius_with_offset():
+    xs, ys, _ = source_trace([0.2, 0.0], [0.1, 0.0], n_steps=36, intensity=1.0)
+    radii = np.sqrt(xs**2 + ys**2)
+    assert np.allclose(radii, 0.3, atol=1e-12)
+
+
 def test_random_sources_in_drum_reproducible_and_bounded():
     positions_a, intensities_a = random_sources_in_drum(5, 0.3, total_intensity=2.0, seed=7)
     positions_b, intensities_b = random_sources_in_drum(5, 0.3, total_intensity=2.0, seed=7)
@@ -65,6 +71,10 @@ def test_multi_source_trace_shapes_and_weight_sum():
     assert ys.shape == (20,)
     assert weights.shape == (20,)
     assert np.isclose(np.sum(weights), 1.0)
+    weights_by_source = np.reshape(weights, (10, 2))
+    assert np.allclose(weights_by_source[:, 0], 0.03)
+    assert np.allclose(weights_by_source[:, 1], 0.07)
+    assert not np.allclose(xs[:10], xs[10:])
 
 
 def test_multi_source_trace_validates_inputs():
