@@ -106,8 +106,6 @@ volume source using equal-area sampling across the drum cross-section.
 Bins a source-trace locus into a 2-D weighted intensity histogram.
 
 ### `plot_cases(...)`
-Generates canonical comparison plots and can optionally append a random
-multi-source case with `plot_cases(random_n_sources=<n>, random_seed=<seed>)`.
 Generates canonical comparison plots (four point-source + two volume-source),
 and can optionally append a random multi-source case with
 `plot_cases(random_n_sources=<n>, random_seed=<seed>)`.
