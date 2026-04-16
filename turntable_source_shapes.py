@@ -8,7 +8,7 @@ paths when viewed from above (top-down view).  The module:
   * provides 2-D rotation-matrix helpers,
   * computes the locus traced by a source during one full turn,
   * bins that locus into a weighted density/intensity map, and
-  * plots four canonical cases with matplotlib.
+  * plots canonical point-source and volume-source cases with matplotlib.
 
 Cases (all viewed from directly above):
   1. Point source on the drum axis, drum centred on the turntable axis
@@ -206,6 +206,77 @@ def multi_source_trace(
     return xs, ys, weights
 
 
+def volume_source_trace(
+    drum_radius: float,
+    drum_offset: np.ndarray | list[float],
+    n_steps: int = 360,
+    intensity: float = 1.0,
+    n_radial: int = 18,
+    n_angular: int = 72,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the locus for a uniformly distributed volume source in a drum.
+
+    A finite set of source points is sampled across the drum cross-section using
+    equal-area bins in polar coordinates, then each point is rotated through one
+    full turntable revolution.
+
+    Parameters
+    ----------
+    drum_radius:
+        Drum radius in metres.
+    drum_offset:
+        (x, y) offset of the drum centre from the turntable rotation axis
+        (metres).
+    n_steps:
+        Number of angular steps for one full revolution.
+    intensity:
+        Total relative emission intensity of the whole drum volume source.
+    n_radial:
+        Number of equal-area radial bins used for source sampling.
+    n_angular:
+        Number of angular bins used for source sampling.
+
+    Returns
+    -------
+    xs, ys, weights:
+        Flattened coordinates and weights of all sampled source positions over
+        all rotation angles; sum(weights) equals *intensity*.
+    """
+    if drum_radius <= 0:
+        raise ValueError("drum_radius must be greater than zero")
+    if n_radial <= 0 or n_angular <= 0:
+        raise ValueError("n_radial and n_angular must be positive")
+
+    drum_offset = np.asarray(drum_offset, dtype=float)
+    thetas_turntable = np.linspace(0, 2 * np.pi, n_steps, endpoint=False)
+
+    # Equal-area sampling inside disk: each radial bin is uniform in r^2, not r.
+    # This keeps each annular bin area approximately equal.
+    radial_idx = np.arange(n_radial, dtype=float)
+    source_r = drum_radius * np.sqrt((radial_idx + 0.5) / n_radial)
+    source_theta = np.linspace(0, 2 * np.pi, n_angular, endpoint=False)
+    radial_grid, angular_grid = np.meshgrid(source_r, source_theta, indexing="xy")
+
+    source_x = (radial_grid * np.cos(angular_grid)).ravel()
+    source_y = (radial_grid * np.sin(angular_grid)).ravel()
+    source_points = np.column_stack([source_x, source_y])
+
+    relative_pos = source_points + drum_offset
+
+    c = np.cos(thetas_turntable)
+    s = np.sin(thetas_turntable)
+    # Broadcast turntable angles against all sampled source points.
+    x_coords = relative_pos[:, 0][None, :]
+    y_coords = relative_pos[:, 1][None, :]
+    xs = c[:, None] * x_coords - s[:, None] * y_coords
+    ys = s[:, None] * x_coords + c[:, None] * y_coords
+
+    xs = xs.ravel()
+    ys = ys.ravel()
+    weights = np.full(xs.size, intensity / xs.size)
+    return xs, ys, weights
+
+
 def compute_density_map(
     xs: np.ndarray,
     ys: np.ndarray,
@@ -268,8 +339,11 @@ def plot_cases(
     grid_size: int = 400,
     random_n_sources: int | None = None,
     random_seed: int | None = None,
+    n_volume_radial: int = 18,
+    n_volume_angular: int = 72,
+    fig_size: tuple[float, float] = (18.0, 12.0),
 ) -> plt.Figure:
-    """Render source-on-turntable cases (4 standard + optional random case).
+    """Render canonical source-on-turntable cases.
 
     Parameters
     ----------
@@ -289,6 +363,12 @@ def plot_cases(
         point sources distributed throughout the drum and random intensities.
     random_seed:
         Optional random seed used when *random_n_sources* is enabled.
+    n_volume_radial:
+        Number of equal-area radial bins used for volume-source sampling.
+    n_volume_angular:
+        Number of angular bins used for volume-source sampling.
+    fig_size:
+        Matplotlib figure size in inches as ``(width, height)``.
 
     Returns
     -------
@@ -331,13 +411,29 @@ def plot_cases(
             "source_in_drum": [source_offset_in_drum, 0.0],
             "drum_offset": [drum_offset, 0.0],
         },
+        {
+            "title": (
+                "Case 5: Uniform volume source in drum\n"
+                "Drum centred on turntable axis"
+            ),
+            "is_volume": True,
+            "drum_offset": [0.0, 0.0],
+        },
+        {
+            "title": (
+                "Case 6: Uniform volume source in drum\n"
+                f"Drum offset {drum_offset:.2f} m from turntable axis"
+            ),
+            "is_volume": True,
+            "drum_offset": [drum_offset, 0.0],
+        },
     ]
 
     if random_n_sources is not None and random_n_sources > 0:
         cases.append(
             {
                 "title": (
-                    f"Case 5: {random_n_sources} random point sources in drum\n"
+                    f"Case 7: {random_n_sources} random point sources in drum\n"
                     "Random source intensities\n"
                     "→ superposed circular traces"
                 ),
@@ -356,12 +452,10 @@ def plot_cases(
     ) * 1.5
     extent = (-r_max, r_max, -r_max, r_max)
 
-    n_cases = len(cases)
-    ncols = 2 if n_cases <= 4 else 3
-    nrows = int(np.ceil(n_cases / ncols))
-
-    fig = plt.figure(figsize=(7 * ncols, 6 * nrows))
-    gs = GridSpec(nrows, ncols, figure=fig, wspace=0.40, hspace=0.55)
+    fig = plt.figure(figsize=fig_size)
+    ncols = 3
+    nrows = int(np.ceil(len(cases) / ncols))
+    gs = GridSpec(nrows, ncols, figure=fig, wspace=0.35, hspace=0.55)
 
     for idx, case in enumerate(cases):
         row, col = divmod(idx, ncols)
@@ -377,6 +471,14 @@ def plot_cases(
                 case["drum_offset"],
                 random_intensities,
                 n_steps=n_steps,
+            )
+        elif case.get("is_volume", False):
+            xs, ys, weights = volume_source_trace(
+                drum_radius=drum_radius,
+                drum_offset=case["drum_offset"],
+                n_steps=n_steps,
+                n_radial=n_volume_radial,
+                n_angular=n_volume_angular,
             )
         else:
             xs, ys, weights = source_trace(
@@ -442,7 +544,7 @@ def plot_cases(
         ax.legend(fontsize=7, loc="upper right")
 
     fig.suptitle(
-        "Top-down view: source traces on a turntable\n"
+        "Top-down view: point and volume source traces on a turntable\n"
         "(gamma-spectrometry waste drum)",
         fontsize=12,
         y=1.01,

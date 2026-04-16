@@ -15,6 +15,8 @@ the top-down (bird's-eye) view depending on their position:
 | Source *off* drum axis, drum centred on turntable | Circular ring (radius = source offset) |
 | Source on drum axis, drum *offset* from turntable axis | Circular ring (radius = drum offset) |
 | Source *off* drum axis, drum *offset* from turntable axis | Circular ring (radius = vector sum of offsets) |
+| Uniform volume source in drum, drum centred on turntable | Filled disk |
+| Uniform volume source in drum, drum *offset* from turntable axis | Thick annulus-like band |
 
 The module uses a 2-D rotation matrix to compute the locus and bins the
 result into a weighted intensity map to account for emission probability.
@@ -27,6 +29,7 @@ from turntable_source_shapes import (
     source_trace,
     random_sources_in_drum,
     multi_source_trace,
+    volume_source_trace,
     plot_cases,
 )
 import matplotlib.pyplot as plt
@@ -39,11 +42,13 @@ xs, ys, weights = source_trace(
     intensity=1.0,
 )
 
-# Or generate the four canonical comparison plots directly
+# Or generate six comparison plots directly (four point-source + two volume-source)
 fig = plot_cases(
     drum_radius=0.30,            # drum radius in metres
     source_offset_in_drum=0.15,  # source radial offset in drum (Case 2)
     drum_offset=0.20,            # drum offset from turntable axis (Case 3)
+    n_volume_radial=18,          # volume-source radial sampling bins
+    n_volume_angular=72,         # volume-source angular sampling bins
 )
 plt.savefig("my_plot.png", dpi=150, bbox_inches="tight")
 plt.show()
@@ -93,12 +98,19 @@ cross-section and assigns different random intensities that sum to
 Computes the combined `(xs, ys, weights)` locus for multiple point sources
 in one drum.
 
+### `volume_source_trace(drum_radius, drum_offset, n_steps=360, intensity=1.0, n_radial=18, n_angular=72)`
+Computes the `(xs, ys, weights)` locus for a uniformly distributed drum
+volume source using equal-area sampling across the drum cross-section.
+
 ### `compute_density_map(xs, ys, weights, grid_size=200, extent=None)`
 Bins a source-trace locus into a 2-D weighted intensity histogram.
 
 ### `plot_cases(...)`
 Generates canonical comparison plots and can optionally append a random
 multi-source case with `plot_cases(random_n_sources=<n>, random_seed=<seed>)`.
+Generates canonical comparison plots (four point-source + two volume-source),
+and can optionally append a random multi-source case with
+`plot_cases(random_n_sources=<n>, random_seed=<seed>)`.
 
 ## Requirements
 
