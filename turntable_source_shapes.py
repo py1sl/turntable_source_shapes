@@ -8,7 +8,7 @@ paths when viewed from above (top-down view).  The module:
   * provides 2-D rotation-matrix helpers,
   * computes the locus traced by a source during one full turn,
   * bins that locus into a weighted density/intensity map, and
-  * plots four canonical cases with matplotlib.
+  * plots canonical point-source and volume-source cases with matplotlib.
 
 Cases (all viewed from directly above):
   1. Point source on the drum axis, drum centred on the turntable axis
@@ -275,8 +275,9 @@ def plot_cases(
     grid_size: int = 400,
     n_volume_radial: int = 18,
     n_volume_angular: int = 72,
+    fig_size: tuple[float, float] = (18.0, 12.0),
 ) -> plt.Figure:
-    """Render four canonical source-on-turntable cases.
+    """Render canonical point-source and volume-source turntable cases.
 
     Parameters
     ----------
@@ -295,6 +296,8 @@ def plot_cases(
         Number of equal-area radial bins used for volume-source sampling.
     n_volume_angular:
         Number of angular bins used for volume-source sampling.
+    fig_size:
+        Matplotlib figure size in inches as ``(width, height)``.
 
     Returns
     -------
@@ -364,7 +367,7 @@ def plot_cases(
     ) * 1.5
     extent = (-r_max, r_max, -r_max, r_max)
 
-    fig = plt.figure(figsize=(18, 12))
+    fig = plt.figure(figsize=fig_size)
     gs = GridSpec(2, 3, figure=fig, wspace=0.35, hspace=0.55)
 
     for idx, case in enumerate(cases):

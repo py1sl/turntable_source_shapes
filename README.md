@@ -40,7 +40,7 @@ xs, ys, weights = source_trace(
     intensity=1.0,
 )
 
-# Or generate the four canonical comparison plots directly
+# Or generate six comparison plots directly (four point-source + two volume-source)
 fig = plot_cases(
     drum_radius=0.30,            # drum radius in metres
     source_offset_in_drum=0.15,  # source radial offset in drum (Case 2)
@@ -78,7 +78,8 @@ volume source using equal-area sampling across the drum cross-section.
 Bins a source-trace locus into a 2-D weighted intensity histogram.
 
 ### `plot_cases(...)`
-Generates a 2×3 matplotlib figure of point-source and volume-source cases.
+Generates a 2×3 matplotlib figure of six cases (four point-source and two
+volume-source cases).
 
 ## Requirements
 
