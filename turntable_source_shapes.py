@@ -602,7 +602,7 @@ def plot_cases(
     container : WasteContainer or None
         Container geometry to use.  If *None*, a
         :class:`CylindricalDrum` with *drum_radius* is created.
-    full_volume_source:
+    full_volume_source : bool
         If *True*, render only the two full-volume-source cases (container
         centred on the turntable axis, and container offset from it).
 
