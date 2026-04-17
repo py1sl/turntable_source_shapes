@@ -7,6 +7,7 @@ from turntable_source_shapes import (
     WasteContainer,
     compute_density_map,
     multi_source_trace,
+    plot_cases,
     random_sources_in_container,
     random_sources_in_drum,
     rotate_point,
@@ -232,6 +233,26 @@ def test_volume_source_trace_cuboid_shapes_and_weight_sum():
     expected_size = 4 * 2 * 3
     assert xs.shape == (expected_size,)
     assert np.isclose(np.sum(weights), 1.0)
+
+
+def test_plot_cases_cuboid_full_volume_source_option_on_and_off_axis():
+    box = CuboidContainer(0.4, 0.6)
+    fig = plot_cases(
+        container=box,
+        drum_offset=0.2,
+        n_steps=8,
+        grid_size=40,
+        n_volume_radial=3,
+        n_volume_angular=4,
+        full_volume_source=True,
+    )
+
+    titled_axes = [ax for ax in fig.axes if ax.get_title()]
+    titles = [ax.get_title() for ax in titled_axes]
+    assert len(titles) == 2
+    assert "Container centred on turntable axis" in titles[0]
+    assert "Container offset 0.20 m from turntable axis" in titles[1]
+    fig.clf()
 
 
 # ---------------------------------------------------------------------------

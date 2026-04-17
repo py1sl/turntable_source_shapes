@@ -78,6 +78,13 @@ plt.show()
 box = CuboidContainer(width=0.50, length=0.40)
 fig = plot_cases(container=box, source_offset_in_drum=0.15, drum_offset=0.20)
 
+# Full-volume-only cuboid cases (on turntable axis and off turntable axis)
+fig = plot_cases(
+    container=box,
+    drum_offset=0.20,
+    full_volume_source=True,
+)
+
 # Volume source trace for a cylindrical drum
 drum = CylindricalDrum(radius=0.30)
 xs, ys, weights = volume_source_trace(
@@ -188,7 +195,9 @@ and can optionally append a random multi-source case with
 `plot_cases(random_n_sources=<n>, random_seed=<seed>)`.  Pass
 `container=CuboidContainer(w, l)` (or any `WasteContainer`) to use a
 non-cylindrical geometry; otherwise a `CylindricalDrum(drum_radius)` is
-created automatically.
+created automatically.  Set `full_volume_source=True` to render only the two
+full-volume cases (container on the turntable axis and container offset from
+the turntable axis), which is useful for cuboid-only volume studies.
 
 ## Requirements
 

@@ -566,6 +566,7 @@ def plot_cases(
     n_volume_angular: int = 72,
     fig_size: tuple[float, float] = (18.0, 12.0),
     container: WasteContainer | None = None,
+    full_volume_source: bool = False,
 ) -> plt.Figure:
     """Render canonical source-on-turntable cases.
 
@@ -601,6 +602,9 @@ def plot_cases(
     container : WasteContainer or None
         Container geometry to use.  If *None*, a
         :class:`CylindricalDrum` with *drum_radius* is created.
+    full_volume_source:
+        If *True*, render only the two full-volume-source cases (container
+        centred on the turntable axis, and container offset from it).
 
     Returns
     -------
@@ -608,60 +612,80 @@ def plot_cases(
     """
     if container is None:
         container = CylindricalDrum(drum_radius)
-    cases = [
-        {
-            "title": (
-                "Case 1: Source on drum axis\n"
-                "Drum centred on turntable axis\n"
-                "→ stationary point"
-            ),
-            "source_in_drum": [0.0, 0.0],
-            "drum_offset": [0.0, 0.0],
-        },
-        {
-            "title": (
-                f"Case 2: Source {source_offset_in_drum:.2f} m off drum axis\n"
-                "Drum centred on turntable axis\n"
-                "→ circular ring"
-            ),
-            "source_in_drum": [source_offset_in_drum, 0.0],
-            "drum_offset": [0.0, 0.0],
-        },
-        {
-            "title": (
-                "Case 3: Source on drum axis\n"
-                f"Drum offset {drum_offset:.2f} m from turntable axis\n"
-                "→ circular ring"
-            ),
-            "source_in_drum": [0.0, 0.0],
-            "drum_offset": [drum_offset, 0.0],
-        },
-        {
-            "title": (
-                f"Case 4: Source {source_offset_in_drum:.2f} m off drum axis\n"
-                f"Drum offset {drum_offset:.2f} m from turntable axis\n"
-                "→ circular ring (vector-sum radius)"
-            ),
-            "source_in_drum": [source_offset_in_drum, 0.0],
-            "drum_offset": [drum_offset, 0.0],
-        },
-        {
-            "title": (
-                "Case 5: Uniform volume source in drum\n"
-                "Drum centred on turntable axis"
-            ),
-            "is_volume": True,
-            "drum_offset": [0.0, 0.0],
-        },
-        {
-            "title": (
-                "Case 6: Uniform volume source in drum\n"
-                f"Drum offset {drum_offset:.2f} m from turntable axis"
-            ),
-            "is_volume": True,
-            "drum_offset": [drum_offset, 0.0],
-        },
-    ]
+    if full_volume_source:
+        cases = [
+            {
+                "title": (
+                    "Case 1: Uniform full-volume source in container\n"
+                    "Container centred on turntable axis"
+                ),
+                "is_volume": True,
+                "drum_offset": [0.0, 0.0],
+            },
+            {
+                "title": (
+                    "Case 2: Uniform full-volume source in container\n"
+                    f"Container offset {drum_offset:.2f} m from turntable axis"
+                ),
+                "is_volume": True,
+                "drum_offset": [drum_offset, 0.0],
+            },
+        ]
+    else:
+        cases = [
+            {
+                "title": (
+                    "Case 1: Source on drum axis\n"
+                    "Drum centred on turntable axis\n"
+                    "→ stationary point"
+                ),
+                "source_in_drum": [0.0, 0.0],
+                "drum_offset": [0.0, 0.0],
+            },
+            {
+                "title": (
+                    f"Case 2: Source {source_offset_in_drum:.2f} m off drum axis\n"
+                    "Drum centred on turntable axis\n"
+                    "→ circular ring"
+                ),
+                "source_in_drum": [source_offset_in_drum, 0.0],
+                "drum_offset": [0.0, 0.0],
+            },
+            {
+                "title": (
+                    "Case 3: Source on drum axis\n"
+                    f"Drum offset {drum_offset:.2f} m from turntable axis\n"
+                    "→ circular ring"
+                ),
+                "source_in_drum": [0.0, 0.0],
+                "drum_offset": [drum_offset, 0.0],
+            },
+            {
+                "title": (
+                    f"Case 4: Source {source_offset_in_drum:.2f} m off drum axis\n"
+                    f"Drum offset {drum_offset:.2f} m from turntable axis\n"
+                    "→ circular ring (vector-sum radius)"
+                ),
+                "source_in_drum": [source_offset_in_drum, 0.0],
+                "drum_offset": [drum_offset, 0.0],
+            },
+            {
+                "title": (
+                    "Case 5: Uniform volume source in drum\n"
+                    "Drum centred on turntable axis"
+                ),
+                "is_volume": True,
+                "drum_offset": [0.0, 0.0],
+            },
+            {
+                "title": (
+                    "Case 6: Uniform volume source in drum\n"
+                    f"Drum offset {drum_offset:.2f} m from turntable axis"
+                ),
+                "is_volume": True,
+                "drum_offset": [drum_offset, 0.0],
+            },
+        ]
 
     if random_n_sources is not None and random_n_sources > 0:
         cases.append(
@@ -679,12 +703,15 @@ def plot_cases(
 
     # Shared spatial extent – large enough for standard and optional cases
     cr = container.characteristic_radius
-    r_max = max(
-        cr,
-        source_offset_in_drum,
-        drum_offset + cr,
-        drum_offset + source_offset_in_drum + cr,
-    ) * 1.5
+    if full_volume_source:
+        r_max = max(cr, drum_offset + cr) * 1.5
+    else:
+        r_max = max(
+            cr,
+            source_offset_in_drum,
+            drum_offset + cr,
+            drum_offset + source_offset_in_drum + cr,
+        ) * 1.5
     extent = (-r_max, r_max, -r_max, r_max)
 
     fig = plt.figure(figsize=fig_size)
@@ -777,12 +804,19 @@ def plot_cases(
         ax.set_aspect("equal")
         ax.legend(fontsize=7, loc="upper right")
 
-    fig.suptitle(
-        "Top-down view: point and volume source traces on a turntable\n"
-        "(gamma-spectrometry waste drum)",
-        fontsize=12,
-        y=1.01,
-    )
+    if full_volume_source:
+        fig.suptitle(
+            "Top-down view: full-volume source traces on a turntable",
+            fontsize=12,
+            y=1.01,
+        )
+    else:
+        fig.suptitle(
+            "Top-down view: point and volume source traces on a turntable\n"
+            "(gamma-spectrometry waste drum)",
+            fontsize=12,
+            y=1.01,
+        )
     return fig
 
 
