@@ -604,7 +604,7 @@ def plot_cases(
         :class:`CylindricalDrum` with *drum_radius* is created.
     full_volume_source : bool
         If *True*, render only the two full-volume-source cases (container
-        centered on the turntable axis, and container offset from it).
+        centred on the turntable axis, and container offset from it).
 
     Returns
     -------
@@ -617,7 +617,7 @@ def plot_cases(
             {
                 "title": (
                     "On-axis full-volume source in container\n"
-                    "Container centered on turntable axis"
+                    "Container centred on turntable axis"
                 ),
                 "is_volume": True,
                 "drum_offset": [0.0, 0.0],
