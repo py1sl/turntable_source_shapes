@@ -250,8 +250,8 @@ def test_plot_cases_cuboid_full_volume_source_option_on_and_off_axis():
     titled_axes = [ax for ax in fig.axes if ax.get_title()]
     titles = [ax.get_title() for ax in titled_axes]
     assert len(titles) == 2
-    assert "Container centred on turntable axis" in titles[0]
-    assert "Container offset 0.20 m from turntable axis" in titles[1]
+    assert "On-axis full-volume source in container" in titles[0]
+    assert "Off-axis full-volume source in container" in titles[1]
     fig.clf()
 
 

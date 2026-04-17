@@ -616,7 +616,7 @@ def plot_cases(
         cases = [
             {
                 "title": (
-                    "Case 1: Uniform full-volume source in container\n"
+                    "On-axis full-volume source in container\n"
                     "Container centred on turntable axis"
                 ),
                 "is_volume": True,
@@ -624,7 +624,7 @@ def plot_cases(
             },
             {
                 "title": (
-                    "Case 2: Uniform full-volume source in container\n"
+                    "Off-axis full-volume source in container\n"
                     f"Container offset {drum_offset:.2f} m from turntable axis"
                 ),
                 "is_volume": True,
