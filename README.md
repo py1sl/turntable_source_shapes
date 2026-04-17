@@ -25,6 +25,20 @@ Container geometry is handled by subclasses of :class:`WasteContainer`:
 * **`CylindricalDrum`** — circular cross-section defined by a radius.
 * **`CuboidContainer`** — rectangular cross-section defined by width and length.
 
+## Installation
+
+Install from the repository root:
+
+```bash
+pip install .
+```
+
+For development tools as well:
+
+```bash
+pip install ".[dev]"
+```
+
 ## Usage
 
 ```python
